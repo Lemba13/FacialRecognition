@@ -17,9 +17,9 @@ class FRDataset(Dataset):
         return len(self.path)
     
     def __getitem__(self,index):
-        img1_path=self.path.iloc[index,1]
-        img2_path=self.path.iloc[index,2]
-        img3_path = self.path.iloc[index, 3]
+        img1_path=self.path.iloc[index,0]
+        img2_path=self.path.iloc[index,1]
+        img3_path = self.path.iloc[index, 2]
         
         img1 = Image.open(img1_path)
         img1 = np.asarray(ImageOps.grayscale(img1))/255.0
