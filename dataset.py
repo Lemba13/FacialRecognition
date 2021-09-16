@@ -1,84 +1,76 @@
-import pandas as pd
-import cv2
-from PIL import Image,ImageOps
-from torch.utils.data import Dataset, DataLoader
-import config
+from loss import TripletLoss
 import torch
-import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
+import config
+
+    
+class SiameseNet(nn.Module):
+    def __init__(self):
+        super(SiameseNet, self).__init__()
+
+        self.conv1 = nn.Conv2d(1, 64, 10)
+        self.conv2 = nn.Conv2d(64, 128, 7)
+        self.conv3 = nn.Conv2d(128, 128, 4)
+        self.conv4 = nn.Conv2d(128, 256, 4)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(128)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.bn4 = nn.BatchNorm2d(256)
+        self.dropout1 = nn.Dropout(0.1)
+        self.dropout2 = nn.Dropout(0.5)
+        self.fc1 = nn.Linear(256*15*15, 512)
+        self.fc2 = nn.Linear(512, 32)
+        #self.fc3 = nn.Linear(64,12)
+        self.sigmoid = nn.Sigmoid()
+
+    def convs(self, x):
+
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.max_pool2d(x, (2, 2))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.max_pool2d(x, (2, 2))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.max_pool2d(x, (2, 2))
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = F.max_pool2d(x, (2, 2))
+
+        return x
+
+    def forward(self, x):
+        x = self.convs(x)
+        x = x.view(x.size()[0], -1)
+
+        x = self.fc1(x)
+        x = self.fc2(x)
+        #x = self.fc3(x)
+
+        return x
+
+    def forward_triple(self, x1, x2, x3):
+        anchor_output = self.forward(x1)
+        positive_output = self.forward(x2)
+        negative_output = self.forward(x3)
+
+        return anchor_output, positive_output, negative_output
+    
+    def forward_prediction(self, x1, x2):
+        anchor_output = self.forward(x1)
+        sample_output = self.forward(x2)
+
+        return anchor_output, sample_output
 
 
+if __name__ == "__main__":
+    criteriion = TripletLoss()
 
-class FRDataset(Dataset):
-    def __init__(self,csv_file,transform=None):
-        self.transform=transform
-        self.path=pd.read_csv(csv_file)
+    model1 = SiameseNet()
+    print(model1)
+    x1 = torch.randn((2, 1,config.IMAGE_HEIGHT, config.IMAGE_WIDTH))
+    x2 = torch.randn((2, 1, config.IMAGE_HEIGHT, config.IMAGE_WIDTH))
+    x3 = torch.randn((2, 1, config.IMAGE_HEIGHT, config.IMAGE_WIDTH))
+    out1,out2,out3= model1.forward_triple(x1,x2,x3)
     
-    def __len__(self):
-        return len(self.path)
+    out=criteriion(out1,out2,out3)
     
-    def __getitem__(self,index):
-        img1_path=self.path.iloc[index,1]
-        img2_path=self.path.iloc[index,2]
-        img3_path = self.path.iloc[index, 3]
-        
-        img1 = Image.open(img1_path)
-        img1 = np.asarray(ImageOps.grayscale(img1))/255.0
-        
-        img2 = Image.open(img2_path)
-        img2 = np.asarray(ImageOps.grayscale(img2))/255.0
-        
-        img3 = Image.open(img3_path)
-        img3 = np.asarray(ImageOps.grayscale(img3))/255.0
-
-        
-        if self.transform:
-            augmentations1=self.transform(image=img1)
-            img1=augmentations1['image']
-            augmentations2 = self.transform(image=img2)
-            img2 = augmentations2['image']
-            augmentations3 = self.transform(image=img3)
-            img3 = augmentations3['image']
-        
-        return img1.type(torch.FloatTensor), img2.type(torch.FloatTensor), img3.type(torch.FloatTensor) 
-    
-    
-class TestDataset(Dataset):
-    def __init__(self, csv_file_path, transform=None):
-        self.transform=transform
-        self.path=pd.read_csv(csv_file_path)
-        
-        
-    def __len__(self):
-        return len(self.path)
-
-    def __getitem__(self,index):
-        img1_path = self.path.iloc[index,0]
-        img2_path = self.path.iloc[index,1]
-        
-        img1 = Image.open(img1_path)
-        img1 = np.asarray(ImageOps.grayscale(img1))/255.0
-
-        img2 = Image.open(img2_path)
-        img2 = np.asarray(ImageOps.grayscale(img2))/255.0
-        
-        if self.transform:
-            augmentations1 = self.transform(image=img1)
-            img1 = augmentations1['image']
-            augmentations2 = self.transform(image=img2)
-            img2 = augmentations2['image']
-            
-        return img1.type(torch.FloatTensor), img2.type(torch.FloatTensor)
-
-def test():
-    
-    dataset=FRDataset(
-        'csv/imgs_triplet.csv',
-        transform=config.transform
-    )
-    
-    sampleloader=DataLoader(dataset=dataset, batch_size=2, shuffle=True)
-    
-    print(next(iter(sampleloader))[0].max())
-   
-if __name__=='__main__':
-    test()
+    print(out1.shape)
