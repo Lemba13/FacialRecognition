@@ -6,7 +6,7 @@ import config
 import torch
 import numpy as np
 
-
+# The training dataset uses 3 inputs anchor image, positive image, negative image for training
 
 class FRDataset(Dataset):
     def __init__(self,csv_file,transform=None):
@@ -41,7 +41,8 @@ class FRDataset(Dataset):
         
         return img1.type(torch.FloatTensor), img2.type(torch.FloatTensor), img3.type(torch.FloatTensor) 
     
-    
+   
+# The test class uses an anchor image and an sample image for prediction.
 class TestDataset(Dataset):
     def __init__(self, csv_file_path, transform=None):
         self.transform = transform
